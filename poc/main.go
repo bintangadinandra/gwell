@@ -17,6 +17,16 @@ type Drill struct {
 	ParticleC string `json:"particle_c" pg:"particle_c"`
 }
 
+// GetAllDrill ...
+func GetAllDrill(db *pg.DB) (drills []*Drill, err error) {
+	start := time.Now()
+	err = db.Model(&drills).Select()
+	end := time.Now()
+	timeDiff := end.Sub(start)
+	fmt.Println(timeDiff.Seconds())
+	return
+}
+
 func main() {
 	start := time.Now()
 	csvFile, err := os.Open("dummy3000.csv")
@@ -77,4 +87,10 @@ func main() {
 	timeDiff := end.Sub(start)
 	fmt.Println("Success")
 	fmt.Println(timeDiff.Seconds())
+
+	drillz, err := GetAllDrill(db)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(len(drillz))
 }
