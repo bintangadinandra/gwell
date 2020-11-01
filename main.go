@@ -2,16 +2,30 @@ package main
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-pg/pg/v10"
+	"github.com/gorilla/mux"
 )
 
-// Drill ...
+// GetAllDrill ...
+func GetAllDrill(db *pg.DB) (drillFloats []*DrillFloat, err error) {
+	start := time.Now()
+	err = db.Model(&drillFloats).Select()
+	end := time.Now()
+	timeDiff := end.Sub(start)
+	fmt.Println(timeDiff.Seconds())
+	return
+}
+
+// Drill
 type Drill struct {
 	Depth          string  `json:"depth"`
 	DT             string  `json:"dt"`
@@ -45,16 +59,6 @@ type DrillFloat struct {
 	CPTimer        float32 `json:"cp_timer"`
 	LCP            float32 `json:"lcp"`
 	FP             float32 `json:"fp"`
-}
-
-// GetAllDrill ...
-func GetAllDrill(db *pg.DB) (drillFloats []*DrillFloat, err error) {
-	start := time.Now()
-	err = db.Model(&drillFloats).Select()
-	end := time.Now()
-	timeDiff := end.Sub(start)
-	fmt.Println(timeDiff.Seconds())
-	return
 }
 
 func main() {
@@ -143,9 +147,38 @@ func main() {
 	fmt.Println("Success")
 	fmt.Println(timeDiff.Seconds())
 
-	drillz, err := GetAllDrill(db)
+	router := mux.NewRouter()
+	router.HandleFunc("/get-all-drill", func(w http.ResponseWriter, r *http.Request) {
+		drills, err := GetAllDrill(db)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		js, err := json.Marshal(drills)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, err = w.Write(js)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+	}).Methods("GET")
+
+	port := fmt.Sprint(":", 9500)
+	addr := flag.String("addr", port, "http service address")
+	s := &http.Server{
+		ReadTimeout:  1 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		Addr:         *addr,
+		Handler:      router,
+	}
+
+	fmt.Printf("Starting API server at %s\n", *addr)
+	err = s.ListenAndServe()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(len(drillz))
 }
