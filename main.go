@@ -61,6 +61,53 @@ type DrillFloat struct {
 	FP             float32 `json:"fp"`
 }
 
+// Success ...
+func Success(w http.ResponseWriter, status int, data interface{}) {
+	resp := map[string]interface{}{
+		"data":  data,
+		"error": nil,
+	}
+	js, err := json.Marshal(resp)
+	if err != nil {
+		resp := map[string]interface{}{
+			"data":  nil,
+			"error": fmt.Sprintf("%s", err),
+		}
+		js, _ = json.Marshal(resp)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, err = w.Write(js)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+// Error ...
+func Error(w http.ResponseWriter, status int, err error) {
+	var errResp map[string]interface{}
+	if err != nil {
+		errCode := http.StatusInternalServerError
+		errMsg := err.Error()
+
+		errResp = map[string]interface{}{
+			"code":    errCode,
+			"message": errMsg,
+		}
+	}
+	resp := map[string]interface{}{
+		"data":  nil,
+		"error": errResp,
+	}
+	js, _ := json.Marshal(resp)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, err = w.Write(js)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
 func main() {
 	start := time.Now()
 	csvFile, err := os.Open("./file/data-main.csv")
@@ -151,20 +198,10 @@ func main() {
 	router.HandleFunc("/get-all-drill", func(w http.ResponseWriter, r *http.Request) {
 		drills, err := GetAllDrill(db)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			Error(w, http.StatusInternalServerError, err)
 			return
 		}
-		js, err := json.Marshal(drills)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(js)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-		w.Header().Add("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		Success(w, 200, drills)
 	}).Methods("GET")
 
 	port := fmt.Sprint(":", 9500)
