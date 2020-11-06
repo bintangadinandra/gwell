@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"gwell-poc/user"
 	"net/http"
 	"os"
 	"strconv"
@@ -25,40 +26,23 @@ func GetAllDrill(db *pg.DB) (drillFloats []*DrillFloat, err error) {
 	return
 }
 
-// Drill
-type Drill struct {
-	Depth          string  `json:"depth"`
-	DT             string  `json:"dt"`
-	RHOB           string  `json:"rhob"`
-	OmegaV         string  `json:"omega_v"`
-	OmegaHCaps     string  `json:"omega_h_caps"`
-	OmegaH         string  `json:"omega_h"`
-	E              float32 `json:"e"`
-	PoissonsRation string  `json:"poissons_ration"`
-	FrictionAngle  string  `json:"friction_angle"`
-	UCS            string  `json:"ucs"`
-	CP             string  `json:"cp"`
-	CPTimer        string  `json:"cp_timer"`
-	LCP            string  `json:"lcp"`
-	FP             string  `json:"fp"`
-}
-
 // DrillFloat ...
 type DrillFloat struct {
 	Depth          float32 `json:"depth"`
-	DT             float32 `json:"dt"`
-	RHOB           float32 `json:"rhob"`
-	OmegaV         float32 `json:"omega_v" pg:"omega_v"`
-	OmegaHCaps     float32 `json:"omega_h_caps" pg:"omega_h_caps"`
-	OmegaH         float32 `json:"omega_h" pg:"omega_h"`
 	E              float32 `json:"e"`
 	PoissonsRation float32 `json:"poissons_ration"`
 	FrictionAngle  float32 `json:"friction_angle"`
 	UCS            float32 `json:"ucs"`
-	CP             float32 `json:"cp"`
-	CPTimer        float32 `json:"cp_timer"`
-	LCP            float32 `json:"lcp"`
-	FP             float32 `json:"fp"`
+	CPSG           float32 `json:"cp_sg" pg:"cp_sg"`
+	CPTimeSG       float32 `json:"cp_time_sg" pg:"cp_time_sg"`
+	LCPSG          float32 `json:"lcp_sg" pg:"lcp_sg"`
+	FPSG           float32 `json:"fp_sg" pg:"fp_sg"`
+	PPSG           float32 `json:"pp_sg" pg:"pp_sg"`
+	CPPSI          float32 `json:"cp_psi" pg:"cp_psi"`
+	CPTimePSI      float32 `json:"cp_time_psi" pg:"cp_time_psi"`
+	LCPPSI         float32 `json:"lcp_psi" pg:"lcp_psi"`
+	FPPSI          float32 `json:"fp_psi" pg:"fp_psi"`
+	PPPSI          float32 `json:"pp_psi" pg:"pp_psi"`
 }
 
 // Success ...
@@ -110,7 +94,7 @@ func Error(w http.ResponseWriter, status int, err error) {
 
 func main() {
 	start := time.Now()
-	csvFile, err := os.Open("./file/data-main.csv")
+	csvFile, err := os.Open("./file/data-main-update.csv")
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -124,10 +108,10 @@ func main() {
 
 	var drillFloats []DrillFloat
 	for i, rec := range records {
-		if i == 0 {
+		if i <= 1 {
 			continue
 		}
-		maxRange := 13
+		maxRange := 16
 		floatRec := make([]float32, 0)
 		for idx, recData := range rec {
 			if idx > maxRange {
@@ -142,19 +126,20 @@ func main() {
 		}
 		drillFloat := DrillFloat{
 			Depth:          floatRec[0],
-			DT:             floatRec[1],
-			RHOB:           floatRec[2],
-			OmegaV:         floatRec[3],
-			OmegaHCaps:     floatRec[4],
-			OmegaH:         floatRec[5],
-			E:              floatRec[6],
-			PoissonsRation: floatRec[7],
-			FrictionAngle:  floatRec[8],
-			UCS:            floatRec[9],
-			CP:             floatRec[10],
-			CPTimer:        floatRec[11],
-			LCP:            floatRec[12],
-			FP:             floatRec[13],
+			PPSG:           floatRec[2],
+			CPSG:           floatRec[3],
+			CPTimeSG:       floatRec[4],
+			LCPSG:          floatRec[5],
+			FPSG:           floatRec[6],
+			PPPSI:          floatRec[7],
+			CPPSI:          floatRec[8],
+			CPTimePSI:      floatRec[9],
+			LCPPSI:         floatRec[10],
+			FPPSI:          floatRec[11],
+			E:              floatRec[12],
+			PoissonsRation: floatRec[13],
+			FrictionAngle:  floatRec[14],
+			UCS:            floatRec[15],
 		}
 		drillFloats = append(drillFloats, drillFloat)
 	}
@@ -203,6 +188,23 @@ func main() {
 		}
 		Success(w, 200, drills)
 	}).Methods("GET")
+	router.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		var payload user.LoginRequest
+		payloadDecoder := json.NewDecoder(r.Body)
+		payloadDecoder.DisallowUnknownFields()
+
+		err := payloadDecoder.Decode(&payload)
+		if err != nil {
+			Error(w, http.StatusBadRequest, err)
+			return
+		}
+		success := user.Login(&payload)
+		if !success {
+			Error(w, http.StatusUnauthorized, nil)
+			return
+		}
+		Success(w, http.StatusOK, nil)
+	}).Methods("POST")
 
 	port := fmt.Sprint(":", 9500)
 	addr := flag.String("addr", port, "http service address")
