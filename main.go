@@ -43,6 +43,7 @@ type DrillFloat struct {
 	LCPPSI         float32 `json:"lcp_psi" pg:"lcp_psi"`
 	FPPSI          float32 `json:"fp_psi" pg:"fp_psi"`
 	PPPSI          float32 `json:"pp_psi" pg:"pp_psi"`
+	DepthName      string  `json:"depth_name" pg:"depth_name"`
 }
 
 // Success ...
@@ -111,10 +112,12 @@ func main() {
 		if i <= 1 {
 			continue
 		}
-		maxRange := 16
+		var depthName string
+		maxRange := 15
 		floatRec := make([]float32, 0)
 		for idx, recData := range rec {
 			if idx > maxRange {
+				depthName = recData
 				break
 			}
 			trimmed := strings.TrimSpace(recData)
@@ -140,6 +143,7 @@ func main() {
 			PoissonsRation: floatRec[13],
 			FrictionAngle:  floatRec[14],
 			UCS:            floatRec[15],
+			DepthName:      depthName,
 		}
 		drillFloats = append(drillFloats, drillFloat)
 	}

@@ -16,4 +16,5 @@ CREATE TABLE drill_floats (
 	lcp_psi numeric NULL,
 	fp_psi numeric NULL,
 	pp_psi numeric NULL,
+	depth_name text NULL
 );
