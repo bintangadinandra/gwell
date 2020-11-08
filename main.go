@@ -153,12 +153,14 @@ func main() {
 		}
 		defer f.Close()
 		io.Copy(f, file)
+
+		csvFile, err := os.Open("./uploads/" + handler.Filename)
 		if err != nil {
 			fmt.Println("Error Download")
 			Error(w, http.StatusInternalServerError, err)
 			return
 		}
-		reader := csv.NewReader(f)
+		reader := csv.NewReader(csvFile)
 		reader.Comma = ';'
 		records, err := reader.ReadAll()
 		if err != nil {
