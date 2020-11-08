@@ -94,60 +94,6 @@ func Error(w http.ResponseWriter, status int, err error) {
 }
 
 func main() {
-	start := time.Now()
-	csvFile, err := os.Open("./file/data-main-update.csv")
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer csvFile.Close()
-	r := csv.NewReader(csvFile)
-	records, err := r.ReadAll()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	var drillFloats []DrillFloat
-	for i, rec := range records {
-		if i <= 1 {
-			continue
-		}
-		var depthName string
-		maxRange := 15
-		floatRec := make([]float32, 0)
-		for idx, recData := range rec {
-			if idx > maxRange {
-				depthName = recData
-				break
-			}
-			trimmed := strings.TrimSpace(recData)
-			floatData, err := strconv.ParseFloat(trimmed, 32)
-			if err != nil {
-				panic(err)
-			}
-			floatRec = append(floatRec, float32(floatData))
-		}
-		drillFloat := DrillFloat{
-			Depth:          floatRec[0],
-			PPSG:           floatRec[2],
-			CPSG:           floatRec[3],
-			CPTimeSG:       floatRec[4],
-			LCPSG:          floatRec[5],
-			FPSG:           floatRec[6],
-			PPPSI:          floatRec[7],
-			CPPSI:          floatRec[8],
-			CPTimePSI:      floatRec[9],
-			LCPPSI:         floatRec[10],
-			FPPSI:          floatRec[11],
-			E:              floatRec[12],
-			PoissonsRation: floatRec[13],
-			FrictionAngle:  floatRec[14],
-			UCS:            floatRec[15],
-			DepthName:      depthName,
-		}
-		drillFloats = append(drillFloats, drillFloat)
-	}
-
 	// Init Database
 	db := pg.Connect(&pg.Options{
 		Addr:     os.Getenv("PG_ADDRESS"),
@@ -156,34 +102,10 @@ func main() {
 		Database: os.Getenv("PG_DATABASE"),
 	})
 	fmt.Println("Success connect to db")
-	_, err = db.Exec("TRUNCATE TABLE drill_floats CASCADE")
-	if err != nil {
-		panic(err)
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	defer tx.Rollback()
-
-	for _, drillFloat := range drillFloats {
-		_, err = tx.Model(&drillFloat).Insert()
-		if err != nil {
-			panic(err)
-		}
-	}
-	err = tx.Commit()
-	if err != nil {
-		panic(err)
-	}
-	end := time.Now()
-	timeDiff := end.Sub(start)
-	fmt.Println("Success")
-	fmt.Println(timeDiff.Seconds())
 
 	router := mux.NewRouter()
+
+	// Routes and Functions
 	router.HandleFunc("/get-all-drill", func(w http.ResponseWriter, r *http.Request) {
 		drills, err := GetAllDrill(db)
 		if err != nil {
@@ -209,6 +131,103 @@ func main() {
 		}
 		Success(w, http.StatusOK, nil)
 	}).Methods("POST")
+	router.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+		r.ParseMultipartForm(32 << 20)
+		file, handler, err := r.FormFile("file")
+		if err != nil {
+			Error(w, http.StatusInternalServerError, err)
+			return
+		}
+		if handler.Header["Content-Type"][0] != "text/csv" {
+			Error(w, http.StatusNotAcceptable, err)
+			return
+		}
+		defer file.Close()
+
+		f, err := os.OpenFile("./uploads/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			fmt.Println("Error Upload")
+			Error(w, http.StatusInternalServerError, err)
+			return
+		}
+		defer f.Close()
+
+		csvFile, err := os.Open("./uploads/" + handler.Filename)
+		if err != nil {
+			fmt.Println("Error Download")
+			Error(w, http.StatusInternalServerError, err)
+			return
+		}
+		reader := csv.NewReader(csvFile)
+		reader.Comma = ';'
+		records, err := reader.ReadAll()
+		if err != nil {
+			Error(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		var drillFloats []DrillFloat
+		for i, rec := range records {
+			if i <= 1 {
+				continue
+			}
+			var depthName string
+			maxRange := 15
+			floatRec := make([]float32, 0)
+			for idx, recData := range rec {
+				if idx > maxRange {
+					depthName = recData
+					break
+				}
+				trimmed := strings.TrimSpace(recData)
+				floatData, err := strconv.ParseFloat(trimmed, 32)
+				if err != nil {
+					panic(err)
+				}
+				floatRec = append(floatRec, float32(floatData))
+			}
+			drillFloat := DrillFloat{
+				Depth:          floatRec[0],
+				PPSG:           floatRec[2],
+				CPSG:           floatRec[3],
+				CPTimeSG:       floatRec[4],
+				LCPSG:          floatRec[5],
+				FPSG:           floatRec[6],
+				PPPSI:          floatRec[7],
+				CPPSI:          floatRec[8],
+				CPTimePSI:      floatRec[9],
+				LCPPSI:         floatRec[10],
+				FPPSI:          floatRec[11],
+				E:              floatRec[12],
+				PoissonsRation: floatRec[13],
+				FrictionAngle:  floatRec[14],
+				UCS:            floatRec[15],
+				DepthName:      depthName,
+			}
+			drillFloats = append(drillFloats, drillFloat)
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			Error(w, http.StatusInternalServerError, err)
+			return
+		}
+		defer tx.Rollback()
+
+		tx.Exec("TRUNCATE TABLE drill_floats CASCADE")
+		for _, drillFloat := range drillFloats {
+			_, err = tx.Model(&drillFloat).Insert()
+			if err != nil {
+				Error(w, http.StatusInternalServerError, err)
+				return
+			}
+		}
+		err = tx.Commit()
+		if err != nil {
+			Error(w, http.StatusInternalServerError, err)
+			return
+		}
+		Success(w, http.StatusOK, "Success Upload File")
+	}).Methods("POST")
 
 	port := fmt.Sprint(":", 9500)
 	addr := flag.String("addr", port, "http service address")
@@ -220,7 +239,7 @@ func main() {
 	}
 
 	fmt.Printf("Starting API server at %s\n", *addr)
-	err = s.ListenAndServe()
+	err := s.ListenAndServe()
 	if err != nil {
 		panic(err)
 	}
