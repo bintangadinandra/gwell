@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"gwell-poc/user"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -151,14 +152,13 @@ func main() {
 			return
 		}
 		defer f.Close()
-
-		csvFile, err := os.Open("./uploads/" + handler.Filename)
+		io.Copy(f, file)
 		if err != nil {
 			fmt.Println("Error Download")
 			Error(w, http.StatusInternalServerError, err)
 			return
 		}
-		reader := csv.NewReader(csvFile)
+		reader := csv.NewReader(f)
 		reader.Comma = ';'
 		records, err := reader.ReadAll()
 		if err != nil {
