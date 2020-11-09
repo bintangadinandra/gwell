@@ -31,6 +31,10 @@ func Login(request *LoginRequest) bool {
 			UserName: "sarip",
 			Password: "sarip123",
 		},
+		&User{
+			UserName: "bitcan01",
+			Password: "b1Tc4NzeR0on3",
+		},
 	}
 	for _, predefinedUser := range predefinedUsers {
 		if predefinedUser.UserName == request.UserName && predefinedUser.Password == request.Password {
